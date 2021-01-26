@@ -1,0 +1,7 @@
+{
+    "dhis2": {
+        "mspBaseUrl": "https://.../33",
+        "dhisBaseUrl": "https://..../29",
+        "token": "Basic "
+    }
+}
