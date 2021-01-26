@@ -37,6 +37,8 @@ const run = async () => {
                     try {
                         const datavaluesfromdhis = await dhis2.get(`/dataValueSets?orgUnit=${orgunit.uid}&dataSet=${dataset}&period=${currentWeek}`).catch((error) => {
                             console.log(error);
+                            fs.writeFile(`./logs/logs_${date.getFullYear()}${date.getMonth()}${date.getDate()}_not_OK.log`, `${orgunit.uid} , ${currentWeek} \n`, { flag: 'a+' }, err => { })
+                            return;
                         });
                         const dataSetValues = datavaluesfromdhis ? datavaluesfromdhis.data : null;
                         if (dataSetValues && dataSetValues.dataValues && dataSetValues.dataValues.length > 0) {
