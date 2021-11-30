@@ -1,10 +1,10 @@
 const axios = require('axios');
 const config = require('config')
 
-const dhis2 = axios.create({ baseURL: config.get('dhis2.dhisBaseUrl') });
-const query = axios.create({ baseURL: config.get('dhis2.mspBaseUrl') });
+const dhis2source = axios.create({ baseURL: config.get('dhis2.source') });
+const dhis2dest = axios.create({ baseURL: config.get('dhis2.destination') });
 
-dhis2.interceptors.request.use((request) => {
+dhis2source.interceptors.request.use((request) => {
     request.headers = {
         Authorization: config.get('dhis2.token'),
         "Content-Type": "application/json"
@@ -12,7 +12,7 @@ dhis2.interceptors.request.use((request) => {
     return request;
 }, (error) => { return Promise.reject(error) });
 
-query.interceptors.request.use((request) => {
+dhis2dest.interceptors.request.use((request) => {
     request.headers = {
         Authorization: config.get('dhis2.token'),
         "Content-Type": "application/json"
@@ -21,5 +21,5 @@ query.interceptors.request.use((request) => {
 }, (error) => { return Promise.reject(error) });
 
 
-exports.dhis2 = dhis2;
-exports.query = query;
+exports.dhis2source = dhis2source;
+exports.dhis2dest = dhis2dest;

@@ -1,21 +1,27 @@
-const { dhis2, query } = require('./dhis2');
+const { dhis2source, dhis2dest } = require('./dhis2');
 const fs = require('fs');
 const csv = require('csv-parser');
+const moment = require('moment');  
 
 
+
+const getLastFewsWeek = (numberOfWeek=4) =>{
+    index =1 ;
+    const weeks = [];
+    while(index <= numberOfWeek){
+        const period = moment().add(-(index++), 'w');
+        weeks.push(`${period.year()}W${period.isoWeek()}`);
+    }
+    return weeks;
+}
 
 
 const run = async () => {
 
-    // En cas de reprise, supprimer les lignes des annees deja traiter et recuperer la derniere semaine traité dans le fichier des OK
-    const periods = [
-        { year: 2017, wStart: 1, wEnd: 52 },
-        { year: 2018, wStart: 1, wEnd: 52 },
-        { year: 2019, wStart: 1, wEnd: 52 },
-        { year: 2020, wStart: 1, wEnd: 53 }
-    ]
+    
+    const periods = getLastFewsWeek();
 
-    const dataset = 'AhWR8jm7KQW'; // AhWR8jm7KQW = SAP
+    const dataset = 'AhWR8jm7KQW'; // SAP
     const orgunits = [];
     const date = new Date();
 
@@ -25,40 +31,56 @@ const run = async () => {
     }).on('end', async () => {
         console.log('Debut du traitement .....');
 
-        for (let i = 0; i < periods.length; i++) { // boucle sur les annees
-            const period = periods[i];
-            let debut = period.wStart
-            while (debut <= period.wEnd) { // boucle sur les semaines a partir de la semaine de reprise
-                const currentWeek = `${period.year}W${debut}`;
-                for (let index = 0; index < orgunits.length; index++) {
-                    const orgunit = orgunits[index];
+        for (let i = 0; i < periods.length; i++) { // boucle sur les semaines
+                const currentWeek = periods[i];
 
-                    // lire les donnees d'une semaine a partir de dhis 2 source
-                    try {
-                        const datavaluesfromdhis = await dhis2.get(`/dataValueSets?orgUnit=${orgunit.uid}&dataSet=${dataset}&period=${currentWeek}`).catch((error) => {
+            for (let index = 0; index < orgunits.length; index++) {
+                const orgunit = orgunits[index];
+
+                // lire les donnees d'une semaine a partir de dhis 2 source
+                try {
+                    const datavaluesfromdhis = await dhis2source.get(`/dataValueSets?orgUnit=${orgunit.uid}&dataSet=${dataset}&period=${currentWeek}`).catch((error) => {
+                        console.log(error);
+                        fs.writeFile(`./logs/logs_${date.getFullYear()}${date.getMonth()}${date.getDate()}_not_OK.log`, `${orgunit.uid} , ${currentWeek} \n`, { flag: 'a+' }, err => { })
+                        return;
+                    });
+
+                    let dataSetValues = datavaluesfromdhis ? datavaluesfromdhis.data : null;
+                    if (dataSetValues && dataSetValues.dataValues && dataSetValues.dataValues.length > 0) {
+                        //delete dataSetValues['completeDate']
+                        // Envoi des donnees vers le dhis 2 destination
+                        await dhis2dest.post('/dataValueSets?importStrategy=CREATE_AND_UPDATE', JSON.stringify(dataSetValues)).catch((error) => {
                             console.log(error);
                             fs.writeFile(`./logs/logs_${date.getFullYear()}${date.getMonth()}${date.getDate()}_not_OK.log`, `${orgunit.uid} , ${currentWeek} \n`, { flag: 'a+' }, err => { })
+                        })
+
+                        // recuperation du completeness
+
+                        const completeness = await dhis2source.get(`/completeDataSetRegistrations?orgUnit=${orgunit.uid}&dataSet=${dataset}&period=${currentWeek}`).catch((error) => {
+                            console.log(error);
                             return;
                         });
-                        const dataSetValues = datavaluesfromdhis ? datavaluesfromdhis.data : null;
-                        if (dataSetValues && dataSetValues.dataValues && dataSetValues.dataValues.length > 0) {
-                            // Envoi des donnees vers le dhis 2 destination
-                            await query.post('/dataValueSets?importStrategy=CREATE_AND_UPDATE', JSON.stringify(dataSetValues)).catch((error) => {
-                                console.log(error);
-                                fs.writeFile(`./logs/logs_${date.getFullYear()}${date.getMonth()}${date.getDate()}_not_OK.log`, `${orgunit.uid} , ${currentWeek} \n`, { flag: 'a+' }, err => { })
-                            })
-                        }
-                    } catch (error) {
-                        fs.writeFile(`./logs/logs_${date.getFullYear()}${date.getMonth()}${date.getDate()}_not_OK.log`, `${orgunit.uid} , ${currentWeek} \n`, { flag: 'a+' }, err => { })
+
+                    if (completeness && completeness.data ) {
+                        const completenessData =completeness.data;
+
+                        console.log(completenessData)
+
+                        await dhis2dest.post('/completeDataSetRegistrations?importStrategy=CREATE_AND_UPDATE', JSON.stringify(completenessData)).catch((error) => {
+                            console.log(error);
+                        })
                     }
 
-
+                    }
+                } catch (error) {
+                    console.log(error)
+                    fs.writeFile(`./logs/logs_${date.getFullYear()}${date.getMonth()}${date.getDate()}_not_OK.log`, `${orgunit.uid} , ${currentWeek} \n`, { flag: 'a+' }, err => { })
                 }
-                fs.writeFile(`./logs/logs_${date.getFullYear()}${date.getMonth()}${date.getDate()}_OK.log`, `${currentWeek}\n`, { flag: 'a+' }, err => { })
-
-                debut = debut + 1;
             }
+            fs.writeFile(`./logs/logs_${date.getFullYear()}${date.getMonth()}${date.getDate()}_OK.log`, `${currentWeek}\n`, { flag: 'a+' }, err => { })
         }
+
+        console.log('Fin du traitement .....');
     });
 }
 
