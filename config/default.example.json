@@ -3,5 +3,6 @@
         "mspBaseUrl": "https://.../33",
         "dhisBaseUrl": "https://..../29",
         "token": "Basic "
-    }
+    },
+    "dataset" : "AhWR8jm7KQW"
 }
