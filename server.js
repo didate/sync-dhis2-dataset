@@ -13,30 +13,37 @@ const dataset = config.get("dataset");
 const run = async () => {
 
     
-    const periods = getLastFewsWeek();
+    const periods = getLastFewsWeek(2);
     const orgunits = [];
 
     fs.createReadStream('./orgunit.csv').pipe(csv()).on('data', (row) => {
         orgunits.push(row);
     }).on('end', async () => {
-        console.log('Debut du traitement .....');
+        console.log('Starting Sync .....');
 
         for (let i = 0; i < periods.length; i++) {
                 const currentWeek = periods[i];
 
             for (let index = 0; index < orgunits.length; index++) {
                 const orgunit = orgunits[index];
+                console.log(`====================================================`);
+                console.log(`Current organisation unit : ${orgunit.uid}`);
+                console.log(`Current period : ${currentWeek}`);
 
                 try {
+                    console.log("Get Dataset values from dhis2 mamou .....")
                     let dataSetValues = await getDataSetValuesFromSource(orgunit.uid, currentWeek);
                     if (dataSetValues && dataSetValues.dataValues && dataSetValues.dataValues.length > 0) {
                         //delete dataSetValues['completeDate']
-                        
+                        console.log("Send Dataset values to dhis2 Surveillance .....")
                         postDataSetValuesToDestination(dataSetValues, orgunit.uid, currentWeek);
 
+                        console.log("Get completeness from dhis 2 mamou .....")
                         const completeness = await getDataSetCompletenessFromSource(orgunit.uid, currentWeek); 
 
                         if (completeness && completeness.data ) {
+                           console.log("Post completeness to dhis 2 Surveillance .....")
+
                             postDataSetCompletenessToDestination(completeness.data);
                         }
 
@@ -49,7 +56,7 @@ const run = async () => {
             logOK(currentWeek)
         }
 
-        console.log('Fin du traitement .....');
+        console.log('End Sync .....');
     });
 }
 
